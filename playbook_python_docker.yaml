@@ -1,0 +1,99 @@
+- name: Bootstrap Python and install Docker
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check if apt is available (Debian/Ubuntu)
+      raw: command -v apt
+      register: apt_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install Python on Debian/Ubuntu
+      raw: apt update && apt install -y python3
+      when: apt_check.rc == 0
+
+    - name: Install Python on RHEL-based systems (Rocky/CentOS)
+      raw: dnf install -y python3 || yum install -y python3
+      when: apt_check.rc != 0
+
+    - name: Ensure 'python' points to 'python3'
+      raw: ln -sf /usr/bin/python3 /usr/bin/python
+      ignore_errors: yes
+
+    - name: Gather facts
+      setup:
+
+    - name: Install Docker dependencies (Debian)
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+        update_cache: true
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Add Docker GPG key (Debian)
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Add Docker APT repository (Debian)
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Install Docker (Debian)
+      apt:
+        name: docker-ce
+        state: present
+        update_cache: true
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Install Docker dependencies (Rocky)
+      dnf:
+        name:
+          - yum-utils
+          - device-mapper-persistent-data
+          - lvm2
+          - ca-certificates
+          - curl
+        state: present
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Add Docker repository (Rocky)
+      get_url:
+        url: https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Install Docker (Rocky)
+      dnf:
+        name: docker-ce
+        state: present
+        update_cache: true
+      when: ansible_facts['os_family'] == "RedHat"
+   
+    - name: Deploy Uptime Kuma with Docker
+      docker_container:
+        name: uptime-kuma
+        image: louislam/uptime-kuma:latest
+        restart_policy: always
+        ports:
+          - "3001:3001"
+        volumes:
+          - /opt/uptime-kuma:/app/data
+
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: true
+
