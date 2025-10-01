@@ -1,0 +1,32 @@
+---
+- name: Install Netdata
+  hosts: all
+  become: true
+  vars:
+    netdata_installer_script: https://my-netdata.io/kickstart.sh
+
+  tasks:
+    - name: Check curl is installed (Debian/Ubuntu)
+      apt:
+        name: curl
+        state: present
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Check curl is installed (RedHat/Rocky)
+      dnf:
+        name: curl
+        state: present
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Download and execute Netdata installer
+      shell: |
+        bash <(curl -Ss {{ netdata_installer_script }})
+      args:
+        executable: /bin/bash
+
+    - name: Check Netdata is started and enabled
+      systemd:
+        name: netdata
+        state: started
+        enabled: true
+
